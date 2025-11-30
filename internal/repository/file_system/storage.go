@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,12 @@ import (
 	"link-service/internal/domain"
 )
 
+type Config struct {
+	DirPath      string `env:"STORAGE_DIR_PATH" env-required:"true"`
+	FileName     string `env:"STORAGE_FILE_NAME" env-required:"true"`
+	TempFileName string `env:"STORAGE_TEMP_FILE_NAME" env-required:"true"`
+}
+
 type Storage struct {
 	mu       *sync.Mutex
 	path     string
@@ -21,51 +28,46 @@ type Storage struct {
 	logger   *zap.Logger
 }
 
-func New(logger *zap.Logger) *Storage {
-	return &Storage{
-		mu:     &sync.Mutex{},
-		logger: logger,
-	}
-}
-
-func (s *Storage) Init(dirPath string, fileName string, tempFileName string) error {
-	err := os.MkdirAll(dirPath, 0755)
+func New(cfg *Config, logger *zap.Logger) (*Storage, error) {
+	err := os.MkdirAll(cfg.DirPath, 0755)
 	if err != nil {
-		s.logger.Error("failed to create dir", zap.String("dir_path", dirPath), zap.Error(err))
-		return fmt.Errorf("failed to create dir: %s: %w", dirPath, err)
+		logger.Error("failed to create dir", zap.String("dir_path", cfg.DirPath), zap.Error(err))
+		return nil, fmt.Errorf("failed to create dir: %s: %w", cfg.DirPath, err)
 	}
 
-	filePath := filepath.Join(dirPath, fileName)
-	tempFilePath := filepath.Join(dirPath, tempFileName)
+	filePath := filepath.Join(cfg.DirPath, cfg.FileName)
+	tempFilePath := filepath.Join(cfg.DirPath, cfg.TempFileName)
 
 	file, err := os.OpenFile(filePath,
 		os.O_CREATE|os.O_WRONLY|os.O_APPEND,
 		0644,
 	)
 	if err != nil {
-		s.logger.Error("failed to create file", zap.String("file_name", fileName), zap.Error(err))
-		return fmt.Errorf("failed to create file: %s: %w", fileName, err)
+		logger.Error("failed to create file", zap.String("file_name", cfg.FileName), zap.Error(err))
+		return nil, fmt.Errorf("failed to create file: %s: %w", cfg.FileName, err)
 	}
 
 	defer file.Close()
-
-	s.path = filePath
 
 	tempFile, err := os.OpenFile(tempFilePath,
 		os.O_CREATE|os.O_WRONLY|os.O_APPEND,
 		0644,
 	)
 	if err != nil {
-		s.logger.Error("failed to create temp file", zap.String("file_name", tempFileName), zap.Error(err))
-		return fmt.Errorf("failed to create temp file: %s: %w", tempFileName, err)
+		logger.Error("failed to create temp file", zap.String("file_name", cfg.TempFileName), zap.Error(err))
+		return nil, fmt.Errorf("failed to create temp file: %s: %w", cfg.TempFileName, err)
 	}
 
 	defer tempFile.Close()
 
-	s.tempPath = tempFilePath
+	logger.Info("files created", zap.String("file", filePath), zap.String("temp_path", tempFilePath))
 
-	s.logger.Info("files created", zap.String("file", filePath), zap.String("temp_path", tempFilePath))
-	return nil
+	return &Storage{
+		mu:       &sync.Mutex{},
+		path:     filePath,
+		tempPath: tempFilePath,
+		logger:   logger,
+	}, nil
 }
 
 func (s *Storage) SaveRecord(record *domain.Record) error {
@@ -154,6 +156,39 @@ func (s *Storage) LoadTempRecords() ([]domain.Record, error) {
 	}
 
 	return records, nil
+}
+
+func (s *Storage) GetRecord(id int64) (*domain.Record, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	file, err := os.Open(s.path)
+	if err != nil {
+		s.logger.Error("failed to open file", zap.String("path", s.path), zap.Error(err))
+		return nil, fmt.Errorf("failed to open file: %s: %w", s.path, err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		var rec domain.Record
+		err = json.Unmarshal(scanner.Bytes(), &rec)
+		if err != nil {
+			continue
+		}
+
+		if rec.ID == id {
+			return &rec, nil
+		}
+	}
+
+	err = scanner.Err()
+	if err != nil {
+		s.logger.Error("failed to scan file", zap.String("path", s.path), zap.Error(err))
+		return nil, fmt.Errorf("failed to scan file: %s: %w", s.path, err)
+	}
+
+	return nil, fmt.Errorf("record with ID %d not found", id)
 }
 
 func (s *Storage) ClearTempFile() error {

@@ -6,11 +6,15 @@ import (
 	"github.com/ilyakaznacheev/cleanenv"
 
 	"link-service/internal/logger"
+	filesystem "link-service/internal/repository/file_system"
 	"link-service/internal/server"
+	"link-service/internal/service"
 )
 
 type Config struct {
 	HTTPServer server.Config
+	Storage    filesystem.Config
+	Service    service.Config
 	Logger     logger.Config
 }
 

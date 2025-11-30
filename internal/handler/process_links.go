@@ -26,7 +26,7 @@ func ProcessLinks(serverCtx context.Context, srv *service.Service, requestTimeou
 		err := json.NewDecoder(r.Body).Decode(&reqLinks)
 		if err != nil {
 			http.Error(w, "cannot decode body", http.StatusBadRequest)
-			logger.Warn("ProcessLinks: cannot decode body", zap.Error(err))
+			logger.Warn("cannot decode body", zap.Error(err))
 			return
 		}
 
@@ -38,7 +38,7 @@ func ProcessLinks(serverCtx context.Context, srv *service.Service, requestTimeou
 			}
 
 			http.Error(w, "failed to process links", http.StatusInternalServerError)
-			logger.Error("ProcessLinks: failed to process links", zap.Error(err))
+			logger.Error("failed to process links", zap.Error(err))
 			return
 		}
 
@@ -52,14 +52,11 @@ func writeResponse(w http.ResponseWriter, rec *domain.Record, logger *zap.Logger
 
 	err := json.NewEncoder(w).Encode(rec)
 	if err != nil {
-		logger.Warn("ProcessLinks: failed to encode response", zap.Error(err))
+		logger.Warn("failed to encode response", zap.Error(err))
 	}
 
 	return err
 }
-
-// TODO: добавить статус unknown, когда сервер остановлен, но получил запрос, указать это в README
-// TODO: упомянуть про 2 контекста и почему я так решил сделать
 
 //pdf := gofpdf.New("P", "mm", "A4", "")
 //pdf.AddPage()

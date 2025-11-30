@@ -20,9 +20,8 @@ import (
 )
 
 // TODO: rename repo
-// TODO: create logger interface
-// TODO: flag -race
 // TODO: упомянуть что, sleep это специальная мера, а не костыль
+// TODO: упомянуть про 2 контекста и почему я так решил сделать
 
 func main() {
 	ctx, cancel := signal.NotifyContext(
@@ -48,16 +47,13 @@ func main() {
 	}
 	defer log.Sync()
 
-	storage := filesystem.New(log)
-	// TODO: вынести в конфиг
-	err = storage.Init("./data", "data.json", "temp.json")
+	storage, err := filesystem.New(&cfg.Storage, log)
 	if err != nil {
 		log.Fatal("cannot initialize storage: %v", zap.Error(err))
 		return
 	}
 
-	// TODO: set a timeout in the config
-	srv := service.New(storage, 30*time.Second, log)
+	srv := service.New(storage, &cfg.Service, log)
 	err = srv.ProcessTempRecords()
 	if err != nil {
 		log.Fatal("failed to process temp records: %v", zap.Error(err))

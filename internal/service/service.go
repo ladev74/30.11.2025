@@ -15,8 +15,6 @@ import (
 	"link-service/internal/repository"
 )
 
-// TODO: process temp file
-
 const (
 	statusAvailable    = "available"
 	statusNotAvailable = "not available"
@@ -30,23 +28,27 @@ var (
 	ErrAppStopped = errors.New("application is stopped")
 )
 
-type Service struct {
-	counter     int64
-	repository  repository.Repository
-	httpClient  *http.Client
-	pingTimeout time.Duration
-	logger      *zap.Logger
+type Config struct {
+	PingTimeout time.Duration `env:"SERVICE_PING_TIMEOUT" env-required:"true"`
 }
 
-func New(repo repository.Repository, pingTimeout time.Duration, logger *zap.Logger) *Service {
+type Service struct {
+	counter    int64
+	repository repository.Repository
+	httpClient *http.Client
+	logger     *zap.Logger
+}
+
+func New(repo repository.Repository, cfg *Config, logger *zap.Logger) *Service {
 	lastLinksNum := repo.LoadLastLinksNum()
 
 	return &Service{
-		repository:  repo,
-		counter:     lastLinksNum,
-		httpClient:  &http.Client{Timeout: pingTimeout},
-		pingTimeout: pingTimeout,
-		logger:      logger,
+		repository: repo,
+		counter:    lastLinksNum,
+		httpClient: &http.Client{
+			Timeout: cfg.PingTimeout,
+		},
+		logger: logger,
 	}
 }
 

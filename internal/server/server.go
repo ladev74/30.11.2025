@@ -35,6 +35,7 @@ func New(ctx context.Context, srv *service.Service, cfgLogger *logger.Config, cf
 	router.Use(middleware.URLFormat)
 
 	router.Post("/links", handler.ProcessLinks(ctx, srv, cfgServer.Timeout, log))
+	router.Get("/links", handler.GetLinks(repo, log))
 
 	return http.Server{
 		Addr:    addr,
